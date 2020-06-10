@@ -2,73 +2,64 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+from layer import *
 
 class Unet(nn.Module):
-    def __init__(self):
+    def __init__(self, nch, nker, norm="bnorm", learning_type = "plain"):
         super(Unet,self).__init__()
-
-        def CBR2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True):
-            layers = []
-            layers += [nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                                 stride=stride, padding=padding, bias=bias)]
-            layers += [nn.BatchNorm2d(num_features=out_channels)]
-            layers += [nn.ReLU()]
-
-            cbr = nn.Sequential(*layers)
-
-            return cbr
+        self.learning_type = learning_type
 
         #Contracting path = encoder part
-        self.enc1_1 = CBR2d(in_channels=1, out_channels=64)
-        self.enc1_2 = CBR2d(in_channels=64, out_channels=64)
+        self.enc1_1 = CBR2d(in_channels=nch, out_channels=1*nker, norm=norm)
+        self.enc1_2 = CBR2d(in_channels=1*nker, out_channels=1*nker, norm=norm)
 
         self.pool1 = nn.MaxPool2d(kernel_size=2)
 
-        self.enc2_1 = CBR2d(in_channels=64, out_channels=128)
-        self.enc2_2 = CBR2d(in_channels=128, out_channels=128)
+        self.enc2_1 = CBR2d(in_channels=1*nker, out_channels=2*nker, norm=norm)
+        self.enc2_2 = CBR2d(in_channels=2*nker, out_channels=2*nker, norm=norm)
 
         self.pool2 = nn.MaxPool2d(kernel_size=2)
 
-        self.enc3_1 = CBR2d(in_channels=128, out_channels=256)
-        self.enc3_2 = CBR2d(in_channels=256, out_channels=256)
+        self.enc3_1 = CBR2d(in_channels=2*nker, out_channels=4*nker, norm=norm)
+        self.enc3_2 = CBR2d(in_channels=4*nker, out_channels=4*nker, norm=norm)
 
         self.pool3 = nn.MaxPool2d(kernel_size=2)
 
-        self.enc4_1 = CBR2d(in_channels=256, out_channels=512)
-        self.enc4_2 = CBR2d(in_channels=512, out_channels=512)
+        self.enc4_1 = CBR2d(in_channels=4*nker, out_channels=8*nker, norm=norm)
+        self.enc4_2 = CBR2d(in_channels=8*nker, out_channels=8*nker, norm=norm)
 
         self.pool4 = nn.MaxPool2d(kernel_size=2)
 
-        self.enc5_1 = CBR2d(in_channels=512, out_channels=1024)
+        self.enc5_1 = CBR2d(in_channels=8*nker, out_channels=16*nker, norm=norm)
 
         #Expansive path = decoder part
-        self.dec5_1 = CBR2d(in_channels=1024, out_channels=512)
+        self.dec5_1 = CBR2d(in_channels=16*nker, out_channels=8*nker, norm=norm)
 
-        self.unpool4 = nn.ConvTranspose2d(in_channels=512, out_channels=512, kernel_size=2, stride=2,
+        self.unpool4 = nn.ConvTranspose2d(in_channels=8*nker, out_channels=8*nker, kernel_size=2, stride=2,
                                           padding=0, bias=True)
 
-        self.dec4_2 = CBR2d(in_channels= 2 * 512, out_channels=512)
-        self.dec4_1 = CBR2d(in_channels= 512, out_channels=256)
+        self.dec4_2 = CBR2d(in_channels= 2 * 8*nker, out_channels=8*nker, norm=norm)
+        self.dec4_1 = CBR2d(in_channels= 8*nker, out_channels=4*nker, norm=norm)
 
-        self.unpool3 = nn.ConvTranspose2d(in_channels=256, out_channels=256, kernel_size=2, stride=2,
+        self.unpool3 = nn.ConvTranspose2d(in_channels=4*nker, out_channels=4*nker, kernel_size=2, stride=2,
                                           padding=0, bias=True)
 
-        self.dec3_2 = CBR2d(in_channels=2 * 256, out_channels=256)
-        self.dec3_1 = CBR2d(in_channels=256, out_channels=128)
+        self.dec3_2 = CBR2d(in_channels=2 * 4*nker, out_channels=4*nker, norm=norm)
+        self.dec3_1 = CBR2d(in_channels=4*nker, out_channels=2*nker, norm=norm)
 
-        self.unpool2 = nn.ConvTranspose2d(in_channels=128, out_channels=128, kernel_size=2, stride=2,
+        self.unpool2 = nn.ConvTranspose2d(in_channels=2*nker, out_channels=2*nker, kernel_size=2, stride=2,
                                           padding=0, bias=True)
 
-        self.dec2_2 = CBR2d(in_channels=2 * 128, out_channels=128)
-        self.dec2_1 = CBR2d(in_channels=128, out_channels=64)
+        self.dec2_2 = CBR2d(in_channels=2 * 2*nker, out_channels=2*nker, norm=norm)
+        self.dec2_1 = CBR2d(in_channels=2*nker, out_channels=1*nker, norm=norm)
 
-        self.unpool1 = nn.ConvTranspose2d(in_channels=64, out_channels=64, kernel_size=2, stride=2,
+        self.unpool1 = nn.ConvTranspose2d(in_channels=1*nker, out_channels=1*nker, kernel_size=2, stride=2,
                                           padding=0, bias=True)
 
-        self.dec1_2 = CBR2d(in_channels=2 * 64, out_channels=64)
-        self.dec1_1 = CBR2d(in_channels=64, out_channels=64)
+        self.dec1_2 = CBR2d(in_channels=2 * 1*nker, out_channels=1*nker, norm=norm)
+        self.dec1_1 = CBR2d(in_channels=1*nker, out_channels=1*nker, norm=norm)
 
-        self.fc = nn.Conv2d(in_channels=64, out_channels=1, kernel_size=1, stride=1, padding=0, bias=True)
+        self.fc = nn.Conv2d(in_channels=1*nker, out_channels=nch, kernel_size=1, stride=1, padding=0, bias=True)
 
     def forward(self,x):
         enc1_1 = self.enc1_1(x)
@@ -111,7 +102,11 @@ class Unet(nn.Module):
         dec1_2 = self.dec1_2(cat1)
         dec1_1 = self.dec1_1(dec1_2)
 
-        x = self.fc(dec1_1)
+        if self.learning_type == "plain":
+            x = self.fc(dec1_1)
+        elif self.learning_type == "residual":
+            x = self.fc(dec1_1) + x
+        #residual parts: Denoising=noise part / super_resolution = high freq(edge parts) / inpainting=non-measured parts
 
         return x
 
