@@ -19,7 +19,7 @@ class Dataset(torch.utils.data.Dataset,):
 
         lst_data.sort()
 
-        self.lst_label = lst_data
+        self.lst_data = lst_data
 
     def __len__(self):
         return len(self.lst_data)
@@ -34,12 +34,12 @@ class Dataset(torch.utils.data.Dataset,):
         if sz[0]>sz[1]:
             img = img.transpose((1,0,2))
 
-        if img.dtype ==np.unit8:
+        if img.dtype == np.uint8:
             img = img/255.0
 
 
         if img.ndim == 2:
-            label = img[:,:, np.newaxis]
+            img = img[:,:, np.newaxis]
 
         label = img
 
